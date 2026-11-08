@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   TouchableOpacity
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { recognitionApi, catalogApi, feedbackApi } from '../../api/services';
+import { recognitionApi, feedbackApi } from '../../api/services';
 import { useAuth } from '../../context/AuthContext';
 import {
   AppButton,
@@ -26,28 +26,13 @@ export default function RecognitionScreen({ navigation }) {
   const [limitReached, setLimitReached] = useState(false);
   const [result, setResult] = useState(null);
 
-  // Estado para simulación asistida desde laptop cuando no se usa cámara física
-  const [catalogRocks, setCatalogRocks] = useState([]);
-  const [selectedRockId, setSelectedRockId] = useState(null);
-
-  // Estado de Retroalimentación (Feedback)
-  const [fbIsCorrect, setFbIsCorrect] = useState(null); // true | false
+  // Estado de Retroalimentación (Feedback guardado en SQLite del backend)
+  const [fbIsCorrect, setFbIsCorrect] = useState(null);
   const [fbComment, setFbComment] = useState('');
   const [fbSaved, setFbSaved] = useState(null);
   const [fbError, setFbError] = useState(null);
   const [fbLoading, setFbLoading] = useState(false);
   const [fbSuccessMsg, setFbSuccessMsg] = useState('');
-
-  useEffect(() => {
-    catalogApi
-      .listRocks({ limit: 20 })
-      .then((res) => {
-        const items = res?.items || [];
-        setCatalogRocks(items);
-        if (items.length > 0) setSelectedRockId(items[0].id);
-      })
-      .catch(() => {});
-  }, []);
 
   const resetFeedbackState = () => {
     setFbIsCorrect(null);
@@ -96,7 +81,7 @@ export default function RecognitionScreen({ navigation }) {
 
   const handleSendImageToAI = async () => {
     if (!selectedImage) {
-      setError('Primero selecciona o captura una fotografía de la muestra.');
+      setError('Primero selecciona o captura una fotografía de la roca.');
       return;
     }
     setProcessing(true);
@@ -106,34 +91,6 @@ export default function RecognitionScreen({ navigation }) {
 
     try {
       const res = await recognitionApi.recognizeAutoImage(selectedImage);
-      setResult(res);
-      if (res.guest) await refreshGuestStatus(res.guest);
-      else if (isGuest) await refreshGuestStatus();
-    } catch (err) {
-      if (err.code === 'GUEST_LIMIT_REACHED' || err.status === 403) {
-        setLimitReached(true);
-        await refreshGuestStatus();
-      }
-      setError(err.message);
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const handleCatalogAssistedRecognition = async () => {
-    if (!selectedRockId) return;
-    setProcessing(true);
-    setError(null);
-    setLimitReached(false);
-    resetFeedbackState();
-
-    try {
-      const res = await recognitionApi.recognizeManual({
-        rockId: selectedRockId,
-        confidence: 94,
-        imageUrl: selectedImage?.uri || 'https://example.org/muestra-campo.jpg',
-        note: 'Reconocimiento desde aplicación móvil'
-      });
       setResult(res);
       if (res.guest) await refreshGuestStatus(res.guest);
       else if (isGuest) await refreshGuestStatus();
@@ -169,14 +126,14 @@ export default function RecognitionScreen({ navigation }) {
       if (!fbSaved) {
         const created = await feedbackApi.create(analysisId, fbIsCorrect, fbComment.trim());
         setFbSaved(created);
-        setFbSuccessMsg('¡Retroalimentación registrada correctamente!');
+        setFbSuccessMsg('¡Retroalimentación guardada en el servidor para revisión del Administrador!');
       } else {
         const updated = await feedbackApi.update(analysisId, {
           isCorrect: fbIsCorrect,
           comment: fbComment.trim()
         });
         setFbSaved(updated);
-        setFbSuccessMsg('¡Retroalimentación actualizada correctamente!');
+        setFbSuccessMsg('¡Retroalimentación actualizada en el servidor!');
       }
     } catch (err) {
       setFbError(err.message);
@@ -196,20 +153,20 @@ export default function RecognitionScreen({ navigation }) {
 
       <View style={styles.card}>
         <Text style={styles.title} accessibilityRole="header">
-          Reconocimiento de Rocas
+          Identificación de Roca por Imagen
         </Text>
         <Text style={styles.subtitle}>
-          Captura una fotografía o selecciona una imagen de tu dispositivo para identificar el espécimen a través del servicio backend.
+          Toma una fotografía o elige una imagen desde tu dispositivo. El archivo se enviará al backend (`POST /api/recognition/auto`) para su clasificación con el modelo GeoDex.
         </Text>
 
         <View style={styles.buttonRow}>
           <AppButton
-            title="📷 Usar Cámara"
+            title="📷 Capturar con Cámara"
             onPress={handleTakePhoto}
             style={{ flex: 1, marginRight: SPACING.xs }}
           />
           <AppButton
-            title="🖼️ Elegir de Galería"
+            title="🖼️ Subir desde Galería"
             variant="secondary"
             onPress={handlePickGallery}
             style={{ flex: 1, marginLeft: SPACING.xs }}
@@ -218,16 +175,16 @@ export default function RecognitionScreen({ navigation }) {
 
         {selectedImage ? (
           <View style={styles.previewBox}>
-            <Text style={styles.previewLabel}>Previsualización de la muestra:</Text>
+            <Text style={styles.previewLabel}>Previsualización de la imagen seleccionada:</Text>
             <Image source={{ uri: selectedImage.uri }} style={styles.previewImage} />
             <AppButton
-              title="Enviar imagen al modelo IA (/recognition/auto)"
+              title="Analizar Imagen con IA"
               loading={processing}
               onPress={handleSendImageToAI}
               style={{ marginTop: SPACING.sm }}
             />
             <AppButton
-              title="Descartar imagen"
+              title="Cambiar o descartar imagen"
               variant="outline"
               onPress={() => {
                 setSelectedImage(null);
@@ -240,50 +197,17 @@ export default function RecognitionScreen({ navigation }) {
         ) : (
           <View style={styles.emptyPreview}>
             <Text style={styles.emptyPreviewText}>
-              Ninguna imagen seleccionada todavía. Elige Cámara o Galería arriba para previsualizar.
+              Aún no has cargado ninguna imagen. Selecciona una foto arriba para previsualizarla y enviarla al clasificador.
             </Text>
           </View>
         )}
-      </View>
-
-      {/* Modo complementario para probar el flujo completo de reconocimiento en el catálogo local */}
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Reconocimiento rápido con muestra del catálogo</Text>
-        <Text style={styles.subtitle}>
-          Selecciona un espécimen de referencia para registrar un análisis en el backend:
-        </Text>
-        <View style={styles.rockChips}>
-          {catalogRocks.map((r) => (
-            <TouchableOpacity
-              key={r.id}
-              onPress={() => setSelectedRockId(r.id)}
-              accessibilityRole="button"
-              style={[styles.rockChip, selectedRockId === r.id && styles.rockChipActive]}
-            >
-              <Text
-                style={[
-                  styles.rockChipText,
-                  selectedRockId === r.id && styles.rockChipTextActive
-                ]}
-              >
-                {r.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-        <AppButton
-          title="Analizar Muestra Seleccionada"
-          variant="outline"
-          loading={processing}
-          onPress={handleCatalogAssistedRecognition}
-        />
       </View>
 
       {limitReached ? (
         <View style={styles.limitCard} accessibilityRole="alert">
           <Text style={styles.limitTitle}>⛔ Alcanzaste el límite de 10 reconocimientos</Text>
           <Text style={styles.limitDesc}>
-            Tu sesión temporal de invitado ha llegado al máximo permitido por el sistema. Regístrate o inicia sesión para conservar tus hallazgos y continuar sin límites.
+            Tu sesión temporal de invitado ha llegado al máximo permitido. Crea una cuenta o inicia sesión para conservar tus descubrimientos y continuar sin límite.
           </Text>
           <AppButton
             title="Crear cuenta y conservar mi progreso"
@@ -294,23 +218,20 @@ export default function RecognitionScreen({ navigation }) {
       ) : null}
 
       {error && !limitReached ? (
-        <ErrorState
-          message={error}
-          onRetry={selectedImage ? handleSendImageToAI : handleCatalogAssistedRecognition}
-        />
+        <ErrorState message={error} onRetry={handleSendImageToAI} />
       ) : null}
 
       {result ? (
         <View style={styles.resultCard}>
           <Text style={styles.resultBadge}>
-            {result.newDiscovery ? '🌟 ¡NUEVO DESCUBRIMIENTO!' : '✅ ROCA IDENTIFICADA'}
+            {result.newDiscovery ? '🌟 ¡NUEVO DESCUBRIMIENTO PARA TU COLECCIÓN!' : '✅ ROCA IDENTIFICADA'}
           </Text>
           <Text style={styles.resultTitle}>{result.analysis?.result}</Text>
           <Text style={styles.resultConfidence}>
-            Nivel de confianza del análisis: {result.analysis?.confidence}%
+            Confianza entregada por el modelo IA: {result.analysis?.confidence}%
           </Text>
           <Text style={styles.resultMeta}>
-            Avistamientos acumulados de esta roca: {result.collection?.recognitionCount}
+            Veces que has reconocido esta roca: {result.collection?.recognitionCount}
           </Text>
 
           {result.unlockedAchievements?.length > 0 ? (
@@ -325,7 +246,7 @@ export default function RecognitionScreen({ navigation }) {
           ) : null}
 
           <AppButton
-            title="Ver Ficha Geológica Completa"
+            title="Ver Ficha Geológica en el Catálogo"
             variant="outline"
             onPress={() =>
               navigation.navigate('CatalogTab', {
@@ -336,14 +257,13 @@ export default function RecognitionScreen({ navigation }) {
             style={{ marginTop: SPACING.sm }}
           />
 
-          {/* Formulario de Retroalimentación exclusivo para Usuarios Autenticados */}
           {isAuthenticated ? (
             <View style={styles.feedbackSection}>
               <Text style={styles.sectionTitle}>
-                {fbSaved ? 'Editar mi evaluación del reconocimiento' : 'Evaluar respuesta de la IA'}
+                {fbSaved ? 'Editar mi evaluación del reconocimiento' : 'Evaluar precisión de la IA'}
               </Text>
               <Text style={styles.subtitle}>
-                ¿El resultado del reconocimiento fue acertado?
+                Tu evaluación se almacena en la base de datos del sistema para que el Administrador supervise el desempeño del modelo.
               </Text>
 
               <View style={styles.buttonRow}>
@@ -390,7 +310,7 @@ export default function RecognitionScreen({ navigation }) {
                 label={`Comentario adicional (${fbComment.length}/255 caracteres)`}
                 value={fbComment}
                 onChangeText={setFbComment}
-                placeholder="Opcional: describe observaciones sobre la textura o clasificación..."
+                placeholder="Opcional: describe por qué consideras acertada o errónea la clasificación..."
                 multiline
               />
 
@@ -405,7 +325,7 @@ export default function RecognitionScreen({ navigation }) {
             </View>
           ) : (
             <Text style={styles.guestFeedbackNotice}>
-              ℹ️ Inicia sesión con una cuenta para calificar la precisión de la IA y dejar comentarios.
+              ℹ️ Inicia sesión con una cuenta para evaluar la respuesta de la IA.
             </Text>
           )}
         </View>
@@ -433,7 +353,7 @@ const styles = StyleSheet.create({
   previewLabel: { fontSize: 13, fontWeight: '700', color: COLORS.text, marginBottom: 6 },
   previewImage: {
     width: '100%',
-    height: 200,
+    height: 220,
     borderRadius: 12,
     backgroundColor: COLORS.surfaceAlt
   },
@@ -444,18 +364,6 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs
   },
   emptyPreviewText: { fontSize: 13, color: COLORS.textSecondary, textAlign: 'center' },
-  rockChips: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: SPACING.sm },
-  rockChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: COLORS.surfaceAlt,
-    borderRadius: 16,
-    marginRight: 8,
-    marginBottom: 8
-  },
-  rockChipActive: { backgroundColor: COLORS.primary },
-  rockChipText: { fontSize: 13, fontWeight: '600', color: COLORS.text },
-  rockChipTextActive: { color: '#FFFFFF' },
   limitCard: {
     margin: SPACING.md,
     padding: SPACING.md,

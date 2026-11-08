@@ -27,7 +27,8 @@ export async function apiRequest(endpoint, { method = 'GET', body, isMultipart =
 
   const config = {
     method,
-    headers
+    headers,
+    cache: 'no-store' // Evita que el navegador devuelva 304 vacío en /user/me
   };
 
   if (body !== undefined) {

@@ -9,16 +9,19 @@ export const AuthProvider = ({ children }) => {
   const [initializing, setInitializing] = useState(true);
   const [mode, setMode] = useState('anonymous'); // 'anonymous' | 'guest' | 'user' | 'admin'
   const [user, setUser] = useState(null);
-  const [guestInfo, setGuestInfo] = useState(null); // { token, remaining, limit, recognitionCount, expiresAt }
+  const [guestInfo, setGuestInfo] = useState(null);
 
   const restoreSession = useCallback(async () => {
     try {
       const savedUserToken = await AsyncStorage.getItem(STORAGE_KEYS.USER_TOKEN);
       if (savedUserToken) {
-        const profile = await authApi.getProfile();
+        const cachedUserRaw = await AsyncStorage.getItem(STORAGE_KEYS.USER_DATA);
+        const cachedUser = cachedUserRaw ? JSON.parse(cachedUserRaw) : null;
+        const profile = (await authApi.getProfile()) || cachedUser;
+        if (!profile) throw new Error('Sesión inválida');
         await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(profile));
         setUser(profile);
-        setMode(profile?.role?.name === 'Admin' ? 'admin' : 'user');
+        setMode(profile?.role?.name === 'Admin' || profile?.roleId === 3 ? 'admin' : 'user');
         return;
       }
 
@@ -95,12 +98,14 @@ export const AuthProvider = ({ children }) => {
     }
 
     await AsyncStorage.multiRemove([STORAGE_KEYS.GUEST_TOKEN, STORAGE_KEYS.GUEST_INFO]);
-    const profile = await authApi.getProfile();
+    const fetchedProfile = await authApi.getProfile();
+    const profile = fetchedProfile || res.user;
     await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(profile));
 
     setGuestInfo(null);
     setUser(profile);
-    setMode(profile?.role?.name === 'Admin' ? 'admin' : 'user');
+    const isAdminUser = profile?.role?.name === 'Admin' || profile?.roleId === 3;
+    setMode(isAdminUser ? 'admin' : 'user');
     return { profile, migrationResult };
   };
 
