@@ -1,14 +1,7 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Switch
-} from 'react-native';
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { AppButton, FormField, ErrorState } from '../../components/UI';
 import { COLORS, SPACING } from '../../theme/theme';
@@ -18,26 +11,17 @@ export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [migrateGuest, setMigrateGuest] = useState(true);
-  const [errors, setErrors] = useState({});
   const [apiError, setApiError] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const validate = () => {
-    const nextErrors = {};
-    if (!email.trim()) nextErrors.email = 'Ingresa tu correo electrónico';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      nextErrors.email = 'El formato del correo no es válido';
-    }
-    if (!password) nextErrors.password = 'Ingresa tu contraseña';
-    setErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
-  };
+  // Validación en tiempo real para activar/desactivar el botón
+  const isFormValid = email.trim().length > 5 && password.trim().length > 0;
 
   const handleSubmit = async () => {
+    if (!isFormValid) return;
     setApiError(null);
-    if (!validate()) return;
-
     setLoading(true);
+    
     try {
       await login(email.trim(), password, { migrateCurrentGuest: isGuest && migrateGuest });
     } catch (err) {
@@ -49,17 +33,14 @@ export default function LoginScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-          <Text style={styles.title} accessibilityRole="header">
-            Iniciar Sesión
-          </Text>
-          <Text style={styles.subtitle}>
-            Ingresa con tus credenciales para acceder a tu colección y herramientas avanzadas.
-          </Text>
+          
+          <View style={styles.headerBox}>
+            <Feather name="user" size={40} color={COLORS.primary} />
+            <Text style={styles.title}>Iniciar Sesión</Text>
+            <Text style={styles.subtitle}>Introduce tus credenciales de acceso</Text>
+          </View>
 
           {apiError ? <ErrorState message={apiError} /> : null}
 
@@ -70,7 +51,6 @@ export default function LoginScreen({ navigation }) {
               onChangeText={setEmail}
               placeholder="ejemplo@correo.cl"
               keyboardType="email-address"
-              error={errors.email}
             />
             <FormField
               label="Contraseña"
@@ -78,21 +58,21 @@ export default function LoginScreen({ navigation }) {
               onChangeText={setPassword}
               placeholder="Ingresa tu contraseña"
               secureTextEntry
-              error={errors.password}
             />
 
             {isGuest && guestInfo ? (
               <View style={styles.migrateRow}>
                 <View style={{ flex: 1, paddingRight: SPACING.sm }}>
-                  <Text style={styles.migrateTitle}>Transferir mi sesión de invitado</Text>
+                  <Text style={styles.migrateTitle}>Transferir mi partida de invitado</Text>
                   <Text style={styles.migrateSub}>
-                    Mover mis {guestInfo.recognitionCount || 0} reconocimientos temporales a esta cuenta.
+                    Se guardarán tus {guestInfo.recognitionCount || 0} hallazgos en esta cuenta.
                   </Text>
                 </View>
                 <Switch
                   value={migrateGuest}
                   onValueChange={setMigrateGuest}
-                  accessibilityLabel="Transferir datos de invitado al iniciar sesión"
+                  trackColor={{ false: COLORS.border, true: COLORS.primaryLight }}
+                  thumbColor={migrateGuest ? COLORS.primary : '#f4f3f4'}
                 />
               </View>
             ) : null}
@@ -100,8 +80,9 @@ export default function LoginScreen({ navigation }) {
             <AppButton
               title="Entrar a mi cuenta"
               loading={loading}
+              disabled={!isFormValid}
               onPress={handleSubmit}
-              style={{ marginTop: SPACING.xs }}
+              style={{ marginTop: SPACING.md }}
             />
           </View>
 
@@ -109,13 +90,7 @@ export default function LoginScreen({ navigation }) {
             title="¿No tienes cuenta? Regístrate aquí"
             variant="outline"
             onPress={() => navigation.navigate('Register')}
-            style={{ marginTop: SPACING.md }}
-          />
-          <AppButton
-            title="Volver"
-            variant="outline"
-            onPress={() => navigation.goBack()}
-            style={{ marginTop: SPACING.sm }}
+            style={{ marginTop: SPACING.lg }}
           />
         </ScrollView>
       </KeyboardAvoidingView>
@@ -125,26 +100,41 @@ export default function LoginScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.background },
-  container: { padding: SPACING.lg },
-  title: { fontSize: 24, fontWeight: '800', color: COLORS.text, marginBottom: 4 },
-  subtitle: { fontSize: 15, color: COLORS.textSecondary, marginBottom: SPACING.lg },
+  container: { padding: SPACING.lg, paddingBottom: SPACING.xl * 2 },
+  headerBox: {
+    alignItems: 'center',
+    marginBottom: SPACING.xl,
+    marginTop: SPACING.md,
+  },
+  title: { 
+    fontSize: 24, 
+    fontWeight: '900', 
+    color: COLORS.text, 
+    marginTop: SPACING.sm 
+  },
+  subtitle: { 
+    fontSize: 14, 
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+    marginTop: 4 
+  },
   card: {
     backgroundColor: COLORS.surface,
     padding: SPACING.lg,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.border
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: COLORS.border,
   },
   migrateRow: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.guestBg,
-    padding: SPACING.sm,
-    borderRadius: 10,
-    marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.guestBadge
+    padding: SPACING.md,
+    borderRadius: 12,
+    marginBottom: SPACING.sm,
+    borderWidth: 2,
+    borderColor: COLORS.guestBadge,
   },
-  migrateTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text },
-  migrateSub: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }
+  migrateTitle: { fontSize: 14, fontWeight: '800', color: COLORS.guestBadge },
+  migrateSub: { fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, marginTop: 4 },
 });

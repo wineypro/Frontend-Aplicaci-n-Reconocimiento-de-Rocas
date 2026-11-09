@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
@@ -15,6 +15,24 @@ export default function HomeDashboardScreen({ navigation }) {
     { title: 'Progreso', icon: 'award', route: 'Progress' },
   ];
 
+  // Función de confirmación (Prevención de Errores)
+  const confirmLogout = () => {
+    Alert.alert(
+      isGuest ? "Salir del modo invitado" : "Cerrar sesión",
+      isGuest 
+        ? "⚠️ Si sales ahora y no has guardado tus descubrimientos en una cuenta, tu inventario se perderá. ¿Seguro que deseas salir?"
+        : "¿Estás seguro de que deseas cerrar tu sesión actual?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        { 
+          text: isGuest ? "Salir y perder progreso" : "Sí, cerrar sesión", 
+          style: "destructive", 
+          onPress: logout 
+        }
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
@@ -26,7 +44,7 @@ export default function HomeDashboardScreen({ navigation }) {
             {isGuest ? `Invitado (${guestInfo?.remaining ?? 10}/10)` : 'Rango: Geólogo Jefe'}
           </Text>
         </View>
-        <TouchableOpacity onPress={logout} style={styles.logoutBtn}>
+        <TouchableOpacity onPress={confirmLogout} style={styles.logoutBtn} accessibilityRole="button">
           <Feather name="log-out" size={20} color={COLORS.danger} />
         </TouchableOpacity>
       </View>
@@ -69,7 +87,7 @@ export default function HomeDashboardScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#E0F7FA' }, // Fondo cielo suave
+  safe: { flex: 1, backgroundColor: '#E0F7FA' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -78,8 +96,8 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.md,
     paddingBottom: SPACING.sm,
   },
-  greeting: { fontSize: 22, fontWeight: '800', color: COLORS.secondary },
-  subGreeting: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },
+  greeting: { fontSize: 22, fontWeight: '900', color: COLORS.secondary },
+  subGreeting: { fontSize: 14, fontWeight: '700', color: COLORS.textSecondary },
   logoutBtn: {
     padding: 10,
     backgroundColor: 'rgba(255,255,255,0.6)',
@@ -88,12 +106,8 @@ const styles = StyleSheet.create({
   container: { padding: SPACING.lg, paddingBottom: SPACING.xl },
   heroBox: { alignItems: 'center', marginBottom: SPACING.xl, marginTop: SPACING.md },
   title: { fontSize: 28, fontWeight: '900', color: COLORS.primary, marginTop: SPACING.sm },
-  subtitle: { fontSize: 16, color: COLORS.secondary, marginTop: 4 },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
+  subtitle: { fontSize: 16, fontWeight: '600', color: COLORS.secondary, marginTop: 4 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   menuCard: {
     width: '48%',
     backgroundColor: COLORS.surface,
@@ -101,7 +115,7 @@ const styles = StyleSheet.create({
     padding: SPACING.lg,
     alignItems: 'center',
     marginBottom: SPACING.md,
-    elevation: 3, // Sombra sutil
+    elevation: 3,
     shadowColor: '#000',
     shadowOpacity: 0.1,
     shadowRadius: 5,
@@ -111,12 +125,12 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#F1F8E9', // Verde muy claro
+    backgroundColor: '#F1F8E9',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING.md,
   },
-  menuText: { fontSize: 16, fontWeight: '800', color: COLORS.text },
+  menuText: { fontSize: 16, fontWeight: '900', color: COLORS.text },
   guestBanner: {
     flexDirection: 'row',
     backgroundColor: COLORS.guestBadge,

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { AppButton, ErrorState } from '../../components/UI';
 import { COLORS, SPACING } from '../../theme/theme';
@@ -25,47 +26,48 @@ export default function WelcomeScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.container}>
-        <View style={styles.heroCard}>
-          <Text style={styles.badge}>GEODEX MOBILE · UCN</Text>
-          <Text style={styles.title} accessibilityRole="header">
-            Identificación y Catálogo Geológico
-          </Text>
-          <Text style={styles.subtitle}>
-            Explora el catálogo de rocas, clasifica muestras con inteligencia artificial, completa logros geológicos y construye tu colección personal.
-          </Text>
+        
+        <View style={styles.heroBox}>
+          <Feather name="map" size={50} color={COLORS.primary} />
+          <Text style={styles.title}>Menú Principal</Text>
+          <Text style={styles.subtitle}>Selecciona tu modo de acceso</Text>
         </View>
 
         {error ? <ErrorState message={error} onRetry={handleGuestAccess} /> : null}
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Acceso con cuenta</Text>
+        <View style={styles.menuCard}>
+          <Text style={styles.sectionTitle}>Modo Online (Guardado Automático)</Text>
           <Text style={styles.sectionDesc}>
-            Reconocimientos ilimitados, colección persistente, laboratorio de fusión y evaluación de resultados de la IA.
+            Acceso ilimitado al escáner, guardado en la nube de tu colección e historial de fusiones.
           </Text>
           <AppButton
-            title="Iniciar Sesión"
+            title="Entrar a mi Partida (Iniciar Sesión)"
             onPress={() => navigation.navigate('Login')}
-            style={{ marginBottom: SPACING.sm }}
+            style={{ marginBottom: SPACING.md }}
           />
           <AppButton
-            title="Crear Cuenta Nueva"
-            variant="secondary"
+            title="Crear Nuevo Personaje (Registro)"
+            variant="outline"
             onPress={() => navigation.navigate('Register')}
           />
         </View>
 
-        <View style={styles.guestSection}>
-          <Text style={styles.guestTitle}>🧭 ¿Quieres probar sin registrarte?</Text>
+        <View style={styles.guestCard}>
+          <View style={styles.guestHeader}>
+            <Feather name="compass" size={24} color={COLORS.guestBadge} style={{ marginRight: 8 }} />
+            <Text style={styles.guestTitle}>Jugar Modo Demo</Text>
+          </View>
           <Text style={styles.sectionDesc}>
-            Como invitado dispones de hasta 10 reconocimientos por sesión temporal y puedes migrar tus descubrimientos al crear una cuenta más adelante.
+            Explora el mundo sin registrarte. Tienes 10 escaneos temporales disponibles.
           </Text>
           <AppButton
-            title="Continuar como Invitado (10 intentos)"
-            variant="outline"
+            title="Continuar como Invitado"
+            variant="secondary"
             loading={loadingGuest}
             onPress={handleGuestAccess}
           />
         </View>
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -74,61 +76,57 @@ export default function WelcomeScreen({ navigation }) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.background },
   container: { padding: SPACING.lg, flexGrow: 1, justifyContent: 'center' },
-  heroCard: {
-    backgroundColor: COLORS.primary,
-    padding: SPACING.lg,
-    borderRadius: 16,
-    marginBottom: SPACING.lg
-  },
-  badge: {
-    color: '#A7F3D0',
-    fontWeight: '700',
-    fontSize: 12,
-    letterSpacing: 1,
-    marginBottom: SPACING.xs
+  heroBox: {
+    alignItems: 'center',
+    marginBottom: SPACING.xl,
   },
   title: {
-    color: '#FFFFFF',
-    fontSize: 26,
-    fontWeight: '800',
-    marginBottom: SPACING.xs
+    fontSize: 28,
+    fontWeight: '900',
+    color: COLORS.text,
+    marginTop: SPACING.sm,
   },
   subtitle: {
-    color: '#E6F4EC',
     fontSize: 15,
-    lineHeight: 22
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+    marginTop: 4,
   },
-  section: {
+  menuCard: {
     backgroundColor: COLORS.surface,
     padding: SPACING.lg,
-    borderRadius: 14,
-    borderWidth: 1,
+    borderRadius: 16,
+    borderWidth: 2,
     borderColor: COLORS.border,
-    marginBottom: SPACING.md
+    marginBottom: SPACING.lg,
   },
-  guestSection: {
+  guestCard: {
     backgroundColor: COLORS.guestBg,
     padding: SPACING.lg,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: COLORS.guestBadge
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: COLORS.guestBadge,
+  },
+  guestHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.text,
-    marginBottom: 4
+    fontSize: 16,
+    fontWeight: '900',
+    color: COLORS.primary,
+    marginBottom: 8,
   },
   guestTitle: {
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '900',
     color: COLORS.guestBadge,
-    marginBottom: 4
   },
   sectionDesc: {
     fontSize: 14,
     color: COLORS.textSecondary,
     lineHeight: 20,
-    marginBottom: SPACING.md
-  }
+    marginBottom: SPACING.lg,
+  },
 });

@@ -3,9 +3,9 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { useAuth } from '../context/AuthContext';
-import { LoadingState } from '../components/UI';
 import { COLORS } from '../theme/theme';
 
+import SplashScreen from '../screens/SplashScreen';
 import WelcomeScreen from '../screens/auth/WelcomeScreen';
 import LoginScreen from '../screens/auth/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
@@ -21,13 +21,8 @@ import AdminScreen from '../screens/admin/AdminScreen';
 const Stack = createNativeStackNavigator();
 
 export default function AppNavigator() {
-  const { initializing, mode } = useAuth();
+  const { mode } = useAuth();
 
-  if (initializing) {
-    return <LoadingState message="Restaurando sesión de GeoDex..." />;
-  }
-
-  // Estilo general para las cabeceras de navegación
   const navOptions = {
     headerStyle: { backgroundColor: COLORS.primary },
     headerTintColor: '#FFFFFF',
@@ -38,6 +33,9 @@ export default function AppNavigator() {
     <NavigationContainer>
       <Stack.Navigator key={mode} screenOptions={navOptions}>
         
+        {/* La pantalla Tap to Start siempre es la primera */}
+        <Stack.Screen name="Splash" component={SplashScreen} options={{ headerShown: false }} />
+
         {/* FLUJO NO AUTENTICADO */}
         {mode === 'anonymous' ? (
           <>
@@ -57,6 +55,8 @@ export default function AppNavigator() {
             <Stack.Screen name="Progress" component={ProgressScreen} options={{ title: 'Logros y Perfil' }} />
             <Stack.Screen name="Admin" component={AdminScreen} options={{ title: 'Panel de Administración' }} />
             <Stack.Screen name="GuestUpgrade" component={RegisterScreen} options={{ title: 'Guardar Progreso' }} />
+            {/* AÑADIDO: Login disponible en el flujo de invitado para poder migrar a una cuenta existente */}
+            <Stack.Screen name="Login" component={LoginScreen} options={{ title: 'Iniciar Sesión' }} />
           </>
         )}
       </Stack.Navigator>
