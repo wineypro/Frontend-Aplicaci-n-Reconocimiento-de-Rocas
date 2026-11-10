@@ -15,7 +15,6 @@ export default function RegisterScreen({ navigation }) {
   const [apiError, setApiError] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Validar campos básicos para activar el botón
   const isFormValid = userName.trim().length > 2 && email.trim().length > 5 && password.length >= 8;
 
   const handleRegister = async () => {
@@ -30,9 +29,16 @@ export default function RegisterScreen({ navigation }) {
         password,
         migrateCurrentGuest: isGuest && migrateGuest
       });
+      
+      // SOLUCIÓN: Reiniciar el historial si veníamos de invitado
+      if (isGuest) {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Dashboard' }],
+        });
+      }
     } catch (err) {
       setApiError(err.message);
-    } finally {
       setLoading(false);
     }
   };
@@ -128,18 +134,8 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xl,
     marginTop: SPACING.md,
   },
-  title: { 
-    fontSize: 24, 
-    fontWeight: '900', 
-    color: COLORS.text, 
-    marginTop: SPACING.sm 
-  },
-  subtitle: { 
-    fontSize: 14, 
-    color: COLORS.textSecondary,
-    fontWeight: '700',
-    marginTop: 4 
-  },
+  title: { fontSize: 24, fontWeight: '900', color: COLORS.text, marginTop: SPACING.sm },
+  subtitle: { fontSize: 14, color: COLORS.textSecondary, fontWeight: '700', marginTop: 4 },
   card: {
     backgroundColor: COLORS.surface,
     padding: SPACING.lg,

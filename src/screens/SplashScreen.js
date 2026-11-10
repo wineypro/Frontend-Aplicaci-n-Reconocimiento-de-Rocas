@@ -4,20 +4,12 @@ import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, SPACING } from '../theme/theme';
 
-export default function SplashScreen({ navigation }) {
-  // Obtenemos 'initializing' (leyendo sesión) y 'mode' (anónimo, invitado, usuario, admin)
-  const { initializing, mode } = useAuth();
+export default function SplashScreen({ onStart }) {
+  const { initializing } = useAuth();
 
   const handleTap = () => {
-    // Si sigue cargando la sesión en segundo plano, no hacemos nada al tocar
     if (initializing) return;
-
-    // Dependiendo del estado de sesión, redirigimos a la ruta correspondiente
-    if (mode === 'anonymous') {
-      navigation.replace('Welcome');
-    } else {
-      navigation.replace('Dashboard');
-    }
+    if (onStart) onStart();
   };
 
   return (
@@ -62,7 +54,7 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 24,
     marginBottom: SPACING.md,
-    transform: [{ rotate: '45deg' }], // Estilo isométrico
+    transform: [{ rotate: '45deg' }],
   },
   title: {
     fontSize: 42,

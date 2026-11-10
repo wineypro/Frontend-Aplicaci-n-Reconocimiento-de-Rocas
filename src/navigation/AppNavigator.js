@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -22,6 +22,7 @@ const Stack = createNativeStackNavigator();
 
 export default function AppNavigator() {
   const { mode } = useAuth();
+  const [hasTappedStart, setHasTappedStart] = useState(false);
 
   const navOptions = {
     headerStyle: { backgroundColor: COLORS.primary },
@@ -29,14 +30,14 @@ export default function AppNavigator() {
     headerTitleStyle: { fontWeight: '800' },
   };
 
+  // Muestra la pantalla de carga interactiva antes de entrar a las vistas principales
+  if (!hasTappedStart) {
+    return <SplashScreen onStart={() => setHasTappedStart(true)} />;
+  }
+
   return (
     <NavigationContainer>
       <Stack.Navigator key={mode} screenOptions={navOptions}>
-        
-        {/* La pantalla Tap to Start siempre es la primera */}
-        <Stack.Screen name="Splash" component={SplashScreen} options={{ headerShown: false }} />
-
-        {/* FLUJO NO AUTENTICADO */}
         {mode === 'anonymous' ? (
           <>
             <Stack.Screen name="Welcome" component={WelcomeScreen} options={{ headerShown: false }} />
@@ -44,8 +45,6 @@ export default function AppNavigator() {
             <Stack.Screen name="Register" component={RegisterScreen} options={{ title: 'Crear Cuenta' }} />
           </>
         ) : (
-          
-        /* FLUJO AUTENTICADO / INVITADO (Dashboard Central) */
           <>
             <Stack.Screen name="Dashboard" component={HomeDashboardScreen} options={{ headerShown: false }} />
             <Stack.Screen name="CatalogList" component={CatalogScreen} options={{ title: 'Catálogo de Bloques' }} />
@@ -55,7 +54,6 @@ export default function AppNavigator() {
             <Stack.Screen name="Progress" component={ProgressScreen} options={{ title: 'Logros y Perfil' }} />
             <Stack.Screen name="Admin" component={AdminScreen} options={{ title: 'Panel de Administración' }} />
             <Stack.Screen name="GuestUpgrade" component={RegisterScreen} options={{ title: 'Guardar Progreso' }} />
-            {/* AÑADIDO: Login disponible en el flujo de invitado para poder migrar a una cuenta existente */}
             <Stack.Screen name="Login" component={LoginScreen} options={{ title: 'Iniciar Sesión' }} />
           </>
         )}

@@ -115,15 +115,19 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
-    await AsyncStorage.multiRemove([
-      STORAGE_KEYS.USER_TOKEN,
-      STORAGE_KEYS.USER_DATA,
-      STORAGE_KEYS.GUEST_TOKEN,
-      STORAGE_KEYS.GUEST_INFO
-    ]);
     setUser(null);
     setGuestInfo(null);
     setMode('anonymous');
+    try {
+      await Promise.all([
+        AsyncStorage.removeItem(STORAGE_KEYS.USER_TOKEN),
+        AsyncStorage.removeItem(STORAGE_KEYS.USER_DATA),
+        AsyncStorage.removeItem(STORAGE_KEYS.GUEST_TOKEN),
+        AsyncStorage.removeItem(STORAGE_KEYS.GUEST_INFO)
+      ]);
+    } catch {
+      // Ignorar errores locales
+    }
   };
 
   return (

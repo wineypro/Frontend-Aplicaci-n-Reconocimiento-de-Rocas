@@ -14,7 +14,6 @@ export default function LoginScreen({ navigation }) {
   const [apiError, setApiError] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Validación en tiempo real para activar/desactivar el botón
   const isFormValid = email.trim().length > 5 && password.trim().length > 0;
 
   const handleSubmit = async () => {
@@ -24,10 +23,17 @@ export default function LoginScreen({ navigation }) {
     
     try {
       await login(email.trim(), password, { migrateCurrentGuest: isGuest && migrateGuest });
+      
+      // SOLUCIÓN: Si era invitado, forzamos la limpieza del historial para que no se quede atrapado
+      if (isGuest) {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Dashboard' }],
+        });
+      }
     } catch (err) {
       setApiError(err.message);
-    } finally {
-      setLoading(false);
+      setLoading(false); // Solo quitamos el loading si falla
     }
   };
 
@@ -106,18 +112,8 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xl,
     marginTop: SPACING.md,
   },
-  title: { 
-    fontSize: 24, 
-    fontWeight: '900', 
-    color: COLORS.text, 
-    marginTop: SPACING.sm 
-  },
-  subtitle: { 
-    fontSize: 14, 
-    color: COLORS.textSecondary,
-    fontWeight: '600',
-    marginTop: 4 
-  },
+  title: { fontSize: 24, fontWeight: '900', color: COLORS.text, marginTop: SPACING.sm },
+  subtitle: { fontSize: 14, color: COLORS.textSecondary, fontWeight: '600', marginTop: 4 },
   card: {
     backgroundColor: COLORS.surface,
     padding: SPACING.lg,

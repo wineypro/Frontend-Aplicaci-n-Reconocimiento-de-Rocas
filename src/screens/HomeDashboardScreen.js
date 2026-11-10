@@ -1,12 +1,14 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
+import { ConfirmModal } from '../components/UI';
 import { COLORS, SPACING, MIN_TOUCH_SIZE } from '../theme/theme';
 
 export default function HomeDashboardScreen({ navigation }) {
-  const { user, isGuest, guestInfo, logout } = useAuth();
+  const { user, isGuest, isAdmin, guestInfo, logout } = useAuth();
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const menuItems = [
     { title: 'Catálogo', icon: 'book', route: 'CatalogList' },
@@ -15,22 +17,13 @@ export default function HomeDashboardScreen({ navigation }) {
     { title: 'Progreso', icon: 'award', route: 'Progress' },
   ];
 
-  // Función de confirmación (Prevención de Errores)
-  const confirmLogout = () => {
-    Alert.alert(
-      isGuest ? "Salir del modo invitado" : "Cerrar sesión",
-      isGuest 
-        ? "⚠️ Si sales ahora y no has guardado tus descubrimientos en una cuenta, tu inventario se perderá. ¿Seguro que deseas salir?"
-        : "¿Estás seguro de que deseas cerrar tu sesión actual?",
-      [
-        { text: "Cancelar", style: "cancel" },
-        { 
-          text: isGuest ? "Salir y perder progreso" : "Sí, cerrar sesión", 
-          style: "destructive", 
-          onPress: logout 
-        }
-      ]
-    );
+  if (isAdmin) {
+    menuItems.push({ title: 'Admin', icon: 'settings', route: 'Admin' });
+  }
+
+  const handleConfirmLogout = async () => {
+    setShowLogoutModal(false);
+    await logout();
   };
 
   return (
@@ -41,11 +34,19 @@ export default function HomeDashboardScreen({ navigation }) {
             Hola, {isGuest ? 'Explorador' : user?.userName}
           </Text>
           <Text style={styles.subGreeting}>
-            {isGuest ? `Invitado (${guestInfo?.remaining ?? 10}/10)` : 'Rango: Geólogo Jefe'}
+            {isGuest
+              ? `Invitado (${guestInfo?.remaining ?? 10}/10 disponibles)`
+              : `Cuenta: ${user?.role?.name || 'Explorador'}`}
           </Text>
         </View>
-        <TouchableOpacity onPress={confirmLogout} style={styles.logoutBtn} accessibilityRole="button">
-          <Feather name="log-out" size={20} color={COLORS.danger} />
+        <TouchableOpacity
+          onPress={() => setShowLogoutModal(true)}
+          style={styles.logoutBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Cerrar sesión"
+        >
+          <Feather name="log-out" size={18} color={COLORS.danger} style={{ marginRight: 6 }} />
+          <Text style={styles.logoutBtnText}>{isGuest ? 'Salir' : 'Cerrar sesión'}</Text>
         </TouchableOpacity>
       </View>
 
@@ -53,7 +54,7 @@ export default function HomeDashboardScreen({ navigation }) {
         <View style={styles.heroBox}>
           <Feather name="hexagon" size={60} color={COLORS.primary} style={{ opacity: 0.8 }} />
           <Text style={styles.title}>GeoDex Mobile</Text>
-          <Text style={styles.subtitle}>¿Qué deseas hacer hoy?</Text>
+          <Text style={styles.subtitle}>Selecciona una herramienta</Text>
         </View>
 
         <View style={styles.grid}>
@@ -82,6 +83,21 @@ export default function HomeDashboardScreen({ navigation }) {
           </TouchableOpacity>
         )}
       </ScrollView>
+
+      <ConfirmModal
+        visible={showLogoutModal}
+        title={isGuest ? 'Salir del modo invitado' : 'Cerrar sesión'}
+        message={
+          isGuest
+            ? 'Si sales ahora sin guardar tu progreso en una cuenta, los hallazgos de esta sesión temporal se perderán. ¿Deseas salir?'
+            : '¿Estás seguro de que deseas cerrar tu sesión actual?'
+        }
+        confirmLabel={isGuest ? 'Salir' : 'Sí, cerrar sesión'}
+        cancelLabel="Cancelar"
+        danger={true}
+        onCancel={() => setShowLogoutModal(false)}
+        onConfirm={handleConfirmLogout}
+      />
     </SafeAreaView>
   );
 }
@@ -99,9 +115,19 @@ const styles = StyleSheet.create({
   greeting: { fontSize: 22, fontWeight: '900', color: COLORS.secondary },
   subGreeting: { fontSize: 14, fontWeight: '700', color: COLORS.textSecondary },
   logoutBtn: {
-    padding: 10,
-    backgroundColor: 'rgba(255,255,255,0.6)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: COLORS.surface,
     borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: COLORS.danger,
+  },
+  logoutBtnText: {
+    color: COLORS.danger,
+    fontWeight: '800',
+    fontSize: 13,
   },
   container: { padding: SPACING.lg, paddingBottom: SPACING.xl },
   heroBox: { alignItems: 'center', marginBottom: SPACING.xl, marginTop: SPACING.md },
