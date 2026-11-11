@@ -17,7 +17,13 @@ export const AuthProvider = ({ children }) => {
       if (savedUserToken) {
         const cachedUserRaw = await AsyncStorage.getItem(STORAGE_KEYS.USER_DATA);
         const cachedUser = cachedUserRaw ? JSON.parse(cachedUserRaw) : null;
-        const profile = (await authApi.getProfile()) || cachedUser;
+        let profile = cachedUser;
+        try {
+          const remoteProfile = await authApi.getProfile();
+          if (remoteProfile) profile = remoteProfile;
+        } catch {
+          // Si falla /user/me usamos el usuario guardado en caché del login
+        }
         if (!profile) throw new Error('Sesión inválida');
         await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(profile));
         setUser(profile);
@@ -98,8 +104,15 @@ export const AuthProvider = ({ children }) => {
     }
 
     await AsyncStorage.multiRemove([STORAGE_KEYS.GUEST_TOKEN, STORAGE_KEYS.GUEST_INFO]);
-    const fetchedProfile = await authApi.getProfile();
-    const profile = fetchedProfile || res.user;
+
+    let profile = res.user || { email };
+    try {
+      const fetchedProfile = await authApi.getProfile();
+      if (fetchedProfile) profile = fetchedProfile;
+    } catch {
+      // Conservar res.user si /user/me falla
+    }
+
     await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(profile));
 
     setGuestInfo(null);

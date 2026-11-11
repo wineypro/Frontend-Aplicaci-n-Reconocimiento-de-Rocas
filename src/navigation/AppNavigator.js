@@ -30,7 +30,6 @@ export default function AppNavigator() {
     headerTitleStyle: { fontWeight: '800' },
   };
 
-  // Muestra la pantalla de carga interactiva antes de entrar a las vistas principales
   if (!hasTappedStart) {
     return <SplashScreen onStart={() => setHasTappedStart(true)} />;
   }
@@ -53,8 +52,12 @@ export default function AppNavigator() {
             <Stack.Screen name="Collection" component={CollectionScreen} options={{ title: 'Mi Inventario y Fusión' }} />
             <Stack.Screen name="Progress" component={ProgressScreen} options={{ title: 'Logros y Perfil' }} />
             <Stack.Screen name="Admin" component={AdminScreen} options={{ title: 'Panel de Administración' }} />
-            <Stack.Screen name="GuestUpgrade" component={RegisterScreen} options={{ title: 'Guardar Progreso' }} />
-            <Stack.Screen name="Login" component={LoginScreen} options={{ title: 'Iniciar Sesión' }} />
+            {mode === 'guest' && (
+              <>
+                <Stack.Screen name="GuestUpgrade" component={RegisterScreen} options={{ title: 'Guardar Progreso' }} />
+                <Stack.Screen name="Login" component={LoginScreen} options={{ title: 'Iniciar Sesión' }} />
+              </>
+            )}
           </>
         )}
       </Stack.Navigator>

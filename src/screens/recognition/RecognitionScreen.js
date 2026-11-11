@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, Switch } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../context/AuthContext';
 import { recognitionApi, feedbackApi } from '../../api/services';
-import { AppButton, Badge, ErrorState, FormField } from '../../components/UI';
+import { AppButton, ErrorState, FormField } from '../../components/UI';
 import { COLORS, SPACING } from '../../theme/theme';
 
 export default function RecognitionScreen({ navigation }) {
@@ -14,8 +14,8 @@ export default function RecognitionScreen({ navigation }) {
   const [error, setError] = useState(null);
   const [limitReached, setLimitReached] = useState(false);
 
-  const [rating, setRating] = useState('5');
-  const [comments, setComments] = useState('');
+  const [isCorrect, setIsCorrect] = useState(true);
+  const [comment, setComment] = useState('');
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackError, setFeedbackError] = useState(null);
@@ -29,7 +29,7 @@ export default function RecognitionScreen({ navigation }) {
     }
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.8
+      quality: 0.7
     });
     if (!res.canceled && res.assets?.length) {
       setSelectedAsset(res.assets[0]);
@@ -46,7 +46,7 @@ export default function RecognitionScreen({ navigation }) {
       return;
     }
     const res = await ImagePicker.launchCameraAsync({
-      quality: 0.8
+      quality: 0.7
     });
     if (!res.canceled && res.assets?.length) {
       setSelectedAsset(res.assets[0]);
@@ -62,7 +62,7 @@ export default function RecognitionScreen({ navigation }) {
     setLimitReached(false);
 
     try {
-      const response = await recognitionApi.recognizeImage(selectedAsset);
+      const response = await recognitionApi.recognizeAutoImage(selectedAsset);
       setResult(response);
       if (isGuest && response?.guest) {
         await refreshGuestStatus(response.guest);
@@ -79,20 +79,10 @@ export default function RecognitionScreen({ navigation }) {
 
   const handleSendFeedback = async () => {
     if (!result?.analysis?.id) return;
-    const numericRating = Number(rating);
-    if (!Number.isInteger(numericRating) || numericRating < 1 || numericRating > 5) {
-      setFeedbackError('La calificación debe ser un número entero entre 1 y 5.');
-      return;
-    }
-
     setFeedbackLoading(true);
     setFeedbackError(null);
     try {
-      await feedbackApi.create({
-        analysisId: result.analysis.id,
-        rating: numericRating,
-        comments: comments.trim() || undefined
-      });
+      await feedbackApi.create(result.analysis.id, isCorrect, comment.trim() || undefined);
       setFeedbackSent(true);
     } catch (err) {
       setFeedbackError(err.message);
@@ -100,6 +90,8 @@ export default function RecognitionScreen({ navigation }) {
       setFeedbackLoading(false);
     }
   };
+
+  const recognizedRockId = result?.rock?.id || result?.analysis?.rockId || result?.collection?.rockId;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -171,45 +163,64 @@ export default function RecognitionScreen({ navigation }) {
       {result && (
         <View style={styles.resultCard}>
           <View style={styles.resultHeader}>
-            <Badge
-              label={result.newDiscovery ? '¡NUEVO DESCUBRIMIENTO!' : 'YA EN TU COLECCIÓN'}
-              color={result.newDiscovery ? COLORS.success : COLORS.primary}
-              bg={result.newDiscovery ? COLORS.successBg : '#E2ECE9'}
-            />
+            <View
+              style={[
+                styles.statusPill,
+                {
+                  backgroundColor: result.newDiscovery
+                    ? COLORS.successBg || '#D4EDDA'
+                    : '#E2ECE9'
+                }
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusPillText,
+                  { color: result.newDiscovery ? COLORS.success : COLORS.primary }
+                ]}
+              >
+                {result.newDiscovery ? '¡NUEVO DESCUBRIMIENTO!' : 'YA EN TU COLECCIÓN'}
+              </Text>
+            </View>
             <Text style={styles.confidence}>
-              Confianza: {Number(result.analysis?.confidence || 0).toFixed(1)}%
+              Confianza: {Number(result.analysis?.confidence || 0).toFixed(0)}%
             </Text>
           </View>
 
-          <Text style={styles.rockName}>{result.rock?.name}</Text>
-          <Text style={styles.scientificName}>{result.rock?.scientificName}</Text>
-          <Text style={styles.rockDesc}>{result.rock?.description}</Text>
+          <Text style={styles.rockName}>{result.rock?.name || result.analysis?.result}</Text>
+          {result.rock?.scientificName ? (
+            <Text style={styles.scientificName}>{result.rock.scientificName}</Text>
+          ) : null}
+          {result.rock?.description ? (
+            <Text style={styles.rockDesc}>{result.rock.description}</Text>
+          ) : null}
 
           {result.unlockedAchievements?.length > 0 && (
             <View style={styles.achievementBanner}>
               <Text style={styles.achTitle}>¡Logros Desbloqueados!</Text>
               {result.unlockedAchievements.map((ach) => (
                 <Text key={ach.id} style={styles.achItem}>
-                  • {ach.name} (+{ach.experience} XP)
+                  • {ach.name}
                 </Text>
               ))}
             </View>
           )}
 
-          {/* BOTONES REPARADOS PARA EL NUEVO NAVEGADOR */}
-          <AppButton
-            title="Ver Ficha Técnica de la Roca"
-            onPress={() =>
-              navigation.navigate('RockDetail', {
-                rockId: result.rock.id,
-                initialRock: result.rock
-              })
-            }
-            style={{ marginTop: SPACING.md }}
-          />
+          {recognizedRockId ? (
+            <AppButton
+              title="Ver Ficha Geológica de la Roca"
+              onPress={() =>
+                navigation.navigate('RockDetail', {
+                  rockId: recognizedRockId,
+                  initialRock: result.rock
+                })
+              }
+              style={{ marginTop: SPACING.md }}
+            />
+          ) : null}
 
           <AppButton
-            title="Ir al Catálogo de Bloques"
+            title="Ver en el Catálogo"
             variant="outline"
             onPress={() => navigation.navigate('CatalogList')}
             style={{ marginTop: SPACING.sm }}
@@ -224,17 +235,21 @@ export default function RecognitionScreen({ navigation }) {
             ) : (
               <>
                 {feedbackError ? <ErrorState message={feedbackError} /> : null}
-                <FormField
-                  label="Calificación (1 a 5 estrellas)"
-                  value={rating}
-                  onChangeText={setRating}
-                  keyboardType="numeric"
-                  placeholder="5"
-                />
+                <View style={styles.switchRow}>
+                  <Text style={styles.switchLabel}>
+                    {isCorrect ? 'Sí, la identificación es correcta' : 'No, la identificación falló'}
+                  </Text>
+                  <Switch
+                    value={isCorrect}
+                    onValueChange={setIsCorrect}
+                    trackColor={{ false: COLORS.border, true: COLORS.primaryLight }}
+                    thumbColor={isCorrect ? COLORS.primary : '#f4f3f4'}
+                  />
+                </View>
                 <FormField
                   label="Comentario opcional"
-                  value={comments}
-                  onChangeText={setComments}
+                  value={comment}
+                  onChangeText={setComment}
                   placeholder="Ej. Excelente precisión"
                 />
                 <AppButton
@@ -301,6 +316,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: SPACING.sm
   },
+  statusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8
+  },
+  statusPillText: {
+    fontSize: 11,
+    fontWeight: '800'
+  },
   confidence: { fontSize: 13, fontWeight: '800', color: COLORS.primary },
   rockName: { fontSize: 24, fontWeight: '900', color: COLORS.text },
   scientificName: { fontSize: 14, fontStyle: 'italic', color: COLORS.textSecondary, marginBottom: SPACING.sm },
@@ -322,5 +346,12 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.border
   },
   feedbackTitle: { fontSize: 16, fontWeight: '800', color: COLORS.text, marginBottom: SPACING.sm },
-  feedbackSuccess: { fontSize: 14, fontWeight: '700', color: COLORS.success, paddingVertical: SPACING.sm }
+  feedbackSuccess: { fontSize: 14, fontWeight: '700', color: COLORS.success, paddingVertical: SPACING.sm },
+  switchRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.sm
+  },
+  switchLabel: { fontSize: 14, fontWeight: '700', color: COLORS.text }
 });

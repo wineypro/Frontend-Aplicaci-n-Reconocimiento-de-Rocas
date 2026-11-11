@@ -13,7 +13,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { catalogApi } from '../../api/services';
 import { LoadingState, ErrorState, EmptyState, AppButton } from '../../components/UI';
-import { getLocalBlockImage } from '../../utils/rockImages';
+import { getRockImageSource } from '../../utils/rockImages';
 import { COLORS, SPACING, MIN_TOUCH_SIZE } from '../../theme/theme';
 
 export default function CatalogScreen({ navigation }) {
@@ -38,8 +38,8 @@ export default function CatalogScreen({ navigation }) {
         catalogApi.listTypes(),
         catalogApi.listCategories()
       ]);
-      setTypes(typesRes?.items || []);
-      setCategories(catsRes?.items || []);
+      setTypes(typesRes?.items || (Array.isArray(typesRes) ? typesRes : []));
+      setCategories(catsRes?.items || (Array.isArray(catsRes) ? catsRes : []));
     } catch {
       // Ignorar fallo en filtros secundarios
     }
@@ -49,20 +49,38 @@ export default function CatalogScreen({ navigation }) {
     setLoading(true);
     setError(null);
     try {
+      let list = [];
+
       if (minHardness.trim() !== '' || maxHardness.trim() !== '') {
         const minVal = minHardness.trim() === '' ? 0 : Number(minHardness);
         const maxVal = maxHardness.trim() === '' ? 10 : Number(maxHardness);
-        const list = await catalogApi.listByHardness(minVal, maxVal);
-        setRocks(Array.isArray(list) ? list : []);
+        const res = await catalogApi.filterByHardness(minVal, maxVal);
+        list = Array.isArray(res) ? res : res?.items || [];
+      } else if (searchQuery.trim() !== '') {
+        const res = await catalogApi.searchByText(searchQuery.trim());
+        list = Array.isArray(res) ? res : res?.items || [];
       } else {
-        const res = await catalogApi.listRocks({
-          typeId: selectedTypeId,
-          categoryId: selectedCategoryId,
-          search: searchQuery.trim() || undefined,
-          limit: 100
-        });
-        setRocks(res?.items || []);
+        const res = await catalogApi.listRocks({ limit: 100 });
+        list = Array.isArray(res) ? res : res?.items || [];
       }
+
+      // Aplicamos filtrado de Tipo y Categoría en cliente también por si se combinan varios filtros a la vez
+      if (selectedTypeId) {
+        list = list.filter((r) => Number(r.typeId) === Number(selectedTypeId));
+      }
+      if (selectedCategoryId) {
+        list = list.filter((r) => Number(r.categoryId) === Number(selectedCategoryId));
+      }
+      if (searchQuery.trim() !== '' && (minHardness.trim() !== '' || maxHardness.trim() !== '')) {
+        const q = searchQuery.trim().toLowerCase();
+        list = list.filter(
+          (r) =>
+            String(r.name || '').toLowerCase().includes(q) ||
+            String(r.scientificName || '').toLowerCase().includes(q)
+        );
+      }
+
+      setRocks(list);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -78,13 +96,13 @@ export default function CatalogScreen({ navigation }) {
     loadRocks();
   }, [loadRocks]);
 
-  // Recargar automáticamente cuando vuelves desde el escáner IA o la fusión
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
+      loadReferenceData();
       loadRocks();
     });
     return unsubscribe;
-  }, [navigation, loadRocks]);
+  }, [navigation, loadReferenceData, loadRocks]);
 
   const clearFilters = () => {
     setSelectedTypeId(null);
@@ -95,15 +113,19 @@ export default function CatalogScreen({ navigation }) {
     setShowFilterModal(false);
   };
 
-  const getRockImageSource = (rock) => {
-    if (rock?.imgUrl && rock.imgUrl.startsWith('http')) {
-      return { uri: rock.imgUrl };
-    }
-    return getLocalBlockImage(rock);
+  const handleOpenDetail = (rockItem) => {
+    if (!rockItem) return;
+    navigation.navigate('RockDetail', {
+      rockId: rockItem.id,
+      initialRock: rockItem
+    });
   };
 
   const renderGridSlot = ({ item }) => {
     const isSelected = selectedRock?.id === item.id;
+    const isLockedByFusion = item.composition === 'LOCKED_BY_FUSION';
+    const imgSource = getRockImageSource(item);
+
     return (
       <TouchableOpacity
         style={[styles.slot, isSelected && styles.slotActive]}
@@ -111,12 +133,24 @@ export default function CatalogScreen({ navigation }) {
         accessibilityRole="button"
         accessibilityLabel={`Seleccionar ${item.name}`}
       >
-        <Image source={getRockImageSource(item)} style={styles.blockImage} />
+        {imgSource ? (
+          <Image source={imgSource} style={styles.blockImage} />
+        ) : (
+          <View style={styles.fusionSlotPlaceholder}>
+            <Feather
+              name={isLockedByFusion ? 'zap' : 'layers'}
+              size={32}
+              color={isLockedByFusion ? COLORS.warning : COLORS.primary}
+            />
+          </View>
+        )}
         <Text style={styles.slotLabel} numberOfLines={1}>
           {item.name}
         </Text>
-        <View style={styles.slotIndexBadge}>
-          <Text style={styles.slotIndexText}>#{item.index}</Text>
+        <View style={[styles.slotIndexBadge, isLockedByFusion && { backgroundColor: COLORS.warning }]}>
+          <Text style={styles.slotIndexText}>
+            {isLockedByFusion ? 'FUSIÓN' : `#${item.index}`}
+          </Text>
         </View>
       </TouchableOpacity>
     );
@@ -128,7 +162,6 @@ export default function CatalogScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Barra superior de búsqueda y botón de filtros */}
       <View style={styles.topBar}>
         <View style={styles.searchBox}>
           <Feather name="search" size={18} color={COLORS.textSecondary} style={{ marginRight: 8 }} />
@@ -151,7 +184,7 @@ export default function CatalogScreen({ navigation }) {
           onPress={() => setShowFilterModal(true)}
           accessibilityRole="button"
         >
-          <Feather name="Sliders" size={18} color={hasActiveFilters ? '#FFF' : COLORS.primary} />
+          <Feather name="sliders" size={18} color={hasActiveFilters ? '#FFF' : COLORS.primary} />
           <Text style={[styles.filterText, hasActiveFilters && { color: '#FFF' }]}>Filtros</Text>
         </TouchableOpacity>
       </View>
@@ -167,7 +200,6 @@ export default function CatalogScreen({ navigation }) {
         )}
       </View>
 
-      {/* Cuadrícula de bloques estilo Inventario */}
       {loading ? (
         <LoadingState message="Cargando inventario geológico..." />
       ) : error ? (
@@ -175,7 +207,7 @@ export default function CatalogScreen({ navigation }) {
       ) : rocks.length === 0 ? (
         <EmptyState
           title="Sin resultados"
-          subtitle="No encontramos rocas con esos filtros."
+          description="No encontramos rocas con esos filtros."
           actionLabel="Restablecer filtros"
           onAction={clearFilters}
         />
@@ -187,18 +219,21 @@ export default function CatalogScreen({ navigation }) {
           renderItem={renderGridSlot}
           contentContainerStyle={[
             styles.gridContainer,
-            selectedRock && { paddingBottom: 220 }
+            selectedRock && { paddingBottom: 230 }
           ]}
           columnWrapperStyle={styles.rowWrapper}
         />
       )}
 
-      {/* Panel inferior fijo estilo Pokémon al tocar una casilla */}
       {selectedRock && (
         <View style={styles.bottomPanel}>
           <View style={styles.panelHeader}>
             <View style={styles.panelImgBox}>
-              <Image source={getRockImageSource(selectedRock)} style={styles.panelImage} />
+              {getRockImageSource(selectedRock) ? (
+                <Image source={getRockImageSource(selectedRock)} style={styles.panelImage} />
+              ) : (
+                <Feather name="zap" size={30} color={COLORS.warning} />
+              )}
             </View>
             <View style={{ flex: 1, marginLeft: SPACING.md }}>
               <Text style={styles.panelTitle}>{selectedRock.name}</Text>
@@ -216,24 +251,25 @@ export default function CatalogScreen({ navigation }) {
           </View>
 
           <Text style={styles.panelDesc} numberOfLines={2}>
-            {selectedRock.description || 'Espécimen geológico registrado en GeoDex.'}
+            {selectedRock.composition === 'LOCKED_BY_FUSION'
+              ? 'Esta roca la descubriste por fusión. ¡Encuéntrala por foto para desbloquear su información!'
+              : selectedRock.description || 'Espécimen geológico registrado en GeoDex.'}
           </Text>
 
           <AppButton
-            title="Ver Ficha Técnica Completa"
-            onPress={() =>
-              navigation.navigate('RockDetail', {
-                rockId: selectedRock.id,
-                initialRock: selectedRock
-              })
-            }
+            title="Ver Ficha Geológica"
+            onPress={() => handleOpenDetail(selectedRock)}
             style={{ marginTop: SPACING.sm }}
           />
         </View>
       )}
 
-      {/* Modal de Filtros */}
-      <Modal visible={showFilterModal} transparent animationType="slide">
+      <Modal
+        visible={showFilterModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowFilterModal(false)}
+      >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
@@ -302,7 +338,7 @@ export default function CatalogScreen({ navigation }) {
                 style={{ flex: 1, marginRight: SPACING.sm }}
               />
               <AppButton
-                title="Aplicar"
+                title="Aplicar Filtros"
                 onPress={() => setShowFilterModal(false)}
                 style={{ flex: 1 }}
               />
@@ -394,7 +430,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 6
   },
-  slotIndexText: { color: '#FFF', fontSize: 10, fontWeight: '800' },
+  slotIndexText: { color: '#FFF', fontSize: 9, fontWeight: '800' },
   bottomPanel: {
     position: 'absolute',
     bottom: 0,

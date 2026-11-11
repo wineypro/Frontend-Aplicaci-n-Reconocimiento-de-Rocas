@@ -9,6 +9,7 @@ import {
   ScrollView
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { Feather } from '@expo/vector-icons';
 import { collectionApi, progressApi } from '../../api/services';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -18,6 +19,7 @@ import {
   AppButton,
   GuestBanner
 } from '../../components/UI';
+import { getRockImageSource } from '../../utils/rockImages';
 import { COLORS, SPACING } from '../../theme/theme';
 
 export default function CollectionScreen({ navigation }) {
@@ -27,7 +29,6 @@ export default function CollectionScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Estado para Laboratorio de Fusión (Alquimia)
   const [showFusion, setShowFusion] = useState(true);
   const [rockId1, setRockId1] = useState(null);
   const [rockId2, setRockId2] = useState(null);
@@ -41,14 +42,22 @@ export default function CollectionScreen({ navigation }) {
     try {
       if (isAuthenticated) {
         const res = await collectionApi.getMyCollection();
-        const list = res?.items || [];
+        const rawList = res?.items || (Array.isArray(res) ? res : []);
+        // Filtrar cualquier roca que haya sido eliminada por el administrador (entry.rock == null)
+        const list = rawList.filter((entry) => entry && entry.rock && entry.rock.name);
         setItems(list);
-        setTotalDistinct(res?.total ?? list.length);
+        setTotalDistinct(list.length);
+
+        const validIds = new Set(list.map((e) => e.rockId));
         if (list.length >= 2) {
-          setRockId1((prev) => prev || list[0].rockId);
-          setRockId2((prev) => prev || list[1].rockId);
+          setRockId1((prev) => (validIds.has(prev) ? prev : list[0].rockId));
+          setRockId2((prev) => (validIds.has(prev) ? prev : list[1].rockId));
         } else if (list.length === 1) {
           setRockId1(list[0].rockId);
+          setRockId2(null);
+        } else {
+          setRockId1(null);
+          setRockId2(null);
         }
       } else {
         const [stats, hist] = await Promise.all([
@@ -57,7 +66,7 @@ export default function CollectionScreen({ navigation }) {
         ]);
         const map = new Map();
         for (const row of hist?.items || []) {
-          if (!row.rock) continue;
+          if (!row.rock || !row.rock.name) continue;
           const existing = map.get(row.rockId);
           if (existing) {
             existing.recognitionCount += 1;
@@ -76,7 +85,7 @@ export default function CollectionScreen({ navigation }) {
         }
         const guestList = Array.from(map.values());
         setItems(guestList);
-        setTotalDistinct(stats?.distinctRocks ?? guestList.length);
+        setTotalDistinct(guestList.length);
       }
     } catch (err) {
       setError(err.message);
@@ -142,18 +151,22 @@ export default function CollectionScreen({ navigation }) {
 
       <View style={styles.summaryHeader}>
         <View style={{ flex: 1, paddingRight: 10 }}>
-          <Text style={styles.summaryTitle}>
-            {isAuthenticated
-              ? '⛏️ Mi Colección Personal (Especímenes Descubiertos)'
-              : '⛏️ Mis Hallazgos en Sesión de Invitado'}
-          </Text>
+          <View style={styles.titleRow}>
+            <Feather name="briefcase" size={18} color={COLORS.primary} style={{ marginRight: 6 }} />
+            <Text style={styles.summaryTitle}>
+              {isAuthenticated
+                ? 'Mi Colección Personal'
+                : 'Mis Hallazgos en Sesión de Invitado'}
+            </Text>
+          </View>
           <Text style={styles.summarySub}>
-            A diferencia del Catálogo general, aquí solo aparecen las rocas que tú has identificado. Total descubiertas: <Text style={styles.bold}>{totalDistinct}</Text>
+            Toca cualquier roca para ver su ficha geológica. Total descubiertas:{' '}
+            <Text style={styles.bold}>{totalDistinct}</Text>
           </Text>
         </View>
         {isAuthenticated ? (
           <AppButton
-            title={showFusion ? 'Ocultar Fusión' : '⚗️ Laboratorio Fusión'}
+            title={showFusion ? 'Ocultar Fusión' : 'Mesa de Fusión'}
             variant="secondary"
             onPress={() => setShowFusion(!showFusion)}
           />
@@ -162,10 +175,13 @@ export default function CollectionScreen({ navigation }) {
 
       {showFusion && isAuthenticated ? (
         <View style={styles.fusionCard}>
-          <Text style={styles.fusionTitle}>⚗️ Laboratorio de Fusión Geológica (/collection/fusion)</Text>
+          <View style={styles.titleRow}>
+            <Feather name="zap" size={18} color={COLORS.secondary} style={{ marginRight: 6 }} />
+            <Text style={styles.fusionTitle}>Laboratorio de Fusión Geológica</Text>
+          </View>
           {items.length < 2 ? (
             <Text style={styles.fusionSub}>
-              Necesitas haber descubierto al menos 2 rocas diferentes en tu colección para poder fusionarlas (actualmente tienes {items.length}). Ve a la pestaña "Reconocer" para descubrir más especímenes.
+              Necesitas haber descubierto al menos 2 rocas diferentes en tu colección para poder fusionarlas (actualmente tienes {items.length}). Ve a "Reconocer" para descubrir más especímenes.
             </Text>
           ) : (
             <>
@@ -205,13 +221,41 @@ export default function CollectionScreen({ navigation }) {
                 ))}
               </ScrollView>
 
-              {fusionError ? <Text style={styles.fusionError}>⚠ {fusionError}</Text> : null}
+              {fusionError ? <Text style={styles.fusionError}>{fusionError}</Text> : null}
+
               {fusionResult ? (
-                <View style={styles.fusionSuccess}>
-                  <Text style={styles.fusionSuccessTitle}>
-                    ✨ Resultado obtenido: {fusionResult.discoveredItem}
+                <View
+                  style={[
+                    styles.fusionSuccess,
+                    (fusionResult.alreadyDiscovered || !fusionResult.newDiscovery) && styles.fusionWarning
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.fusionSuccessTitle,
+                      (fusionResult.alreadyDiscovered || !fusionResult.newDiscovery) && {
+                        color: COLORS.warning
+                      }
+                    ]}
+                  >
+                    {fusionResult.alreadyDiscovered || !fusionResult.newDiscovery
+                      ? `Ya habías descubierto: ${fusionResult.discoveredItem}`
+                      : `Nueva roca por fusión: ${fusionResult.discoveredItem}`}
                   </Text>
                   <Text style={styles.fusionSuccessMsg}>{fusionResult.message}</Text>
+                  {fusionResult.rock ? (
+                    <TouchableOpacity
+                      style={styles.viewFusedBtn}
+                      onPress={() =>
+                        navigation.navigate('RockDetail', {
+                          rockId: fusionResult.rock.id,
+                          initialRock: fusionResult.rock
+                        })
+                      }
+                    >
+                      <Text style={styles.viewFusedBtnText}>Ver Ficha de la Roca →</Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
               ) : null}
 
@@ -228,49 +272,71 @@ export default function CollectionScreen({ navigation }) {
 
       {items.length === 0 ? (
         <EmptyState
-          icon="⛏️"
           title="Aún no has descubierto ninguna roca"
           description="El Catálogo muestra todas las rocas existentes, pero tu Colección solo guarda las que tú identificas. Ve a 'Reconocer' para registrar tu primer hallazgo."
           actionLabel="Ir a Reconocer Rocas"
-          onAction={() => navigation.navigate('RecognitionTab')}
+          onAction={() => navigation.navigate('Recognition')}
         />
       ) : (
         <FlatList
           data={items}
           keyExtractor={(item) => String(item.rockId)}
           contentContainerStyle={{ padding: SPACING.md }}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.card}
-              onPress={() =>
-                navigation.navigate('CatalogTab', {
-                  screen: 'RockDetail',
-                  params: { rockId: item.rockId, initialRock: item.rock }
-                })
-              }
-              accessibilityRole="button"
-              accessibilityLabel={`Ver detalles de ${item.rock?.name}, descubierta el ${formatDate(
-                item.firstDiscoveredAt
-              )}, reconocida ${item.recognitionCount} veces`}
-            >
-              <Image
-                source={{
-                  uri: item.rock?.imgUrl || 'https://via.placeholder.com/90x90.png?text=Roca'
-                }}
-                style={styles.thumb}
-              />
-              <View style={styles.info}>
-                <Text style={styles.rockName}>{item.rock?.name || `Roca #${item.rockId}`}</Text>
-                <Text style={styles.rockSci}>{item.rock?.scientificName}</Text>
-                <Text style={styles.meta}>
-                  📅 Primer descubrimiento: <Text style={styles.bold}>{formatDate(item.firstDiscoveredAt)}</Text>
-                </Text>
-                <Text style={styles.meta}>
-                  🔄 Veces identificada por ti: <Text style={styles.bold}>{item.recognitionCount}</Text>
-                </Text>
-              </View>
-            </TouchableOpacity>
-          )}
+          renderItem={({ item }) => {
+            const isLockedByFusion = item.rock?.composition === 'LOCKED_BY_FUSION';
+            return (
+              <TouchableOpacity
+                style={styles.card}
+                onPress={() =>
+                  navigation.navigate('RockDetail', {
+                    rockId: item.rockId,
+                    initialRock: item.rock
+                  })
+                }
+                accessibilityRole="button"
+              >
+                <View style={styles.thumbBox}>
+                  {getRockImageSource(item.rock) ? (
+                    <Image source={getRockImageSource(item.rock)} style={styles.thumb} />
+                  ) : (
+                    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                      <Feather
+                        name={isLockedByFusion ? 'zap' : 'layers'}
+                        size={28}
+                        color={isLockedByFusion ? COLORS.warning : COLORS.primary}
+                      />
+                    </View>
+                  )}
+                </View>
+                <View style={styles.info}>
+                  <View style={styles.cardHeaderRow}>
+                    <Text style={styles.rockName}>{item.rock?.name}</Text>
+                    {isLockedByFusion ? (
+                      <View style={styles.fusionPill}>
+                        <Text style={styles.fusionPillText}>FUSIÓN (Falta Foto)</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Text style={styles.rockSci}>{item.rock?.scientificName}</Text>
+                  {isLockedByFusion ? (
+                    <Text style={styles.fusionHint}>
+                      Descubierta por fusión. ¡Tómale una foto para desbloquear su información!
+                    </Text>
+                  ) : (
+                    <>
+                      <Text style={styles.meta}>
+                        Primer descubrimiento: <Text style={styles.bold}>{formatDate(item.firstDiscoveredAt)}</Text>
+                      </Text>
+                      <Text style={styles.meta}>
+                        Veces identificada: <Text style={styles.bold}>{item.recognitionCount}</Text>
+                      </Text>
+                    </>
+                  )}
+                  <Text style={styles.tapDetailText}>Ver ficha geológica →</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          }}
         />
       )}
     </View>
@@ -288,6 +354,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center'
   },
+  titleRow: { flexDirection: 'row', alignItems: 'center' },
   summaryTitle: { fontSize: 17, fontWeight: '800', color: COLORS.text },
   summarySub: { fontSize: 13, color: COLORS.textSecondary, marginTop: 2, lineHeight: 18 },
   bold: { fontWeight: '800', color: COLORS.primary },
@@ -300,8 +367,8 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: COLORS.secondary
   },
-  fusionTitle: { fontSize: 16, fontWeight: '800', color: COLORS.secondary, marginBottom: 4 },
-  fusionSub: { fontSize: 13, color: COLORS.textSecondary, marginBottom: SPACING.sm, lineHeight: 18 },
+  fusionTitle: { fontSize: 16, fontWeight: '800', color: COLORS.secondary },
+  fusionSub: { fontSize: 13, color: COLORS.textSecondary, marginVertical: SPACING.xs, lineHeight: 18 },
   pickLabel: { fontSize: 13, fontWeight: '700', color: COLORS.text, marginTop: 4, marginBottom: 4 },
   chipRow: { marginBottom: 6 },
   chip: {
@@ -314,27 +381,59 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: COLORS.primary },
   chipText: { fontSize: 13, fontWeight: '600', color: COLORS.text },
   chipTextActive: { color: '#FFFFFF' },
-  fusionError: { color: COLORS.danger, fontSize: 13, fontWeight: '600', marginVertical: 6 },
+  fusionError: { color: COLORS.danger, fontSize: 13, fontWeight: '700', marginVertical: 6 },
   fusionSuccess: {
-    backgroundColor: COLORS.successBg,
+    backgroundColor: COLORS.successBg || '#D4EDDA',
     padding: SPACING.sm,
     borderRadius: 10,
-    marginVertical: 6
+    marginVertical: 6,
+    borderWidth: 1,
+    borderColor: COLORS.success
+  },
+  fusionWarning: {
+    backgroundColor: COLORS.warningBg || '#FFF3CD',
+    borderColor: COLORS.warning
   },
   fusionSuccessTitle: { fontSize: 14, fontWeight: '800', color: COLORS.success },
   fusionSuccessMsg: { fontSize: 13, color: COLORS.text, marginTop: 2 },
+  viewFusedBtn: { marginTop: 6 },
+  viewFusedBtnText: { fontSize: 13, fontWeight: '800', color: COLORS.primary },
   card: {
     flexDirection: 'row',
     backgroundColor: COLORS.surface,
     borderRadius: 14,
     padding: SPACING.sm,
     marginBottom: SPACING.sm,
+    borderWidth: 1.5,
+    borderColor: COLORS.border
+  },
+  thumbBox: {
+    width: 80,
+    height: 80,
+    borderRadius: 10,
+    backgroundColor: COLORS.background,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: COLORS.border
   },
-  thumb: { width: 80, height: 80, borderRadius: 10, backgroundColor: COLORS.surfaceAlt },
+  thumb: { width: 64, height: 64, resizeMode: 'contain' },
   info: { flex: 1, marginLeft: SPACING.sm, justifyContent: 'center' },
+  cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   rockName: { fontSize: 17, fontWeight: '800', color: COLORS.text },
   rockSci: { fontSize: 13, fontStyle: 'italic', color: COLORS.textSecondary, marginBottom: 4 },
-  meta: { fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }
+  fusionPill: {
+    backgroundColor: COLORS.warningBg || '#FFF3CD',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6
+  },
+  fusionPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.warning
+  },
+  meta: { fontSize: 12, color: COLORS.textSecondary, marginTop: 1 },
+  fusionHint: { fontSize: 12, color: COLORS.warning, fontWeight: '700', marginTop: 2 },
+  tapDetailText: { fontSize: 12, fontWeight: '800', color: COLORS.primary, marginTop: 6 }
 });
