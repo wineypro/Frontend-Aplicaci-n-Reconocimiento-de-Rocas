@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { catalogApi, progressApi, adminApi } from '../../api/services';
 import { useAuth } from '../../context/AuthContext';
@@ -15,11 +15,12 @@ export default function RockDetailScreen({ route, navigation }) {
   const [loading, setLoading] = useState(!initialRock);
   const [error, setError] = useState(null);
 
-  // Estado exclusivo para edición docente (Maestro / Admin)
+  const roleName = String(user?.role?.name || '').toLowerCase();
   const isTeacher =
     user?.roleId === 2 ||
-    String(user?.role?.name || '').toLowerCase() === 'teacher' ||
-    String(user?.role?.name || '').toLowerCase() === 'maestro';
+    roleName === 'docente' ||
+    roleName === 'teacher' ||
+    roleName === 'maestro';
   const canEditPedagogicalInfo = isTeacher || isAdmin;
 
   const [editingNote, setEditingNote] = useState(false);
@@ -49,26 +50,37 @@ export default function RockDetailScreen({ route, navigation }) {
         commonUses: data?.commonUses || ''
       });
 
-      // Filtrar todas las capturas fotográficas que el usuario ha hecho de esta misma roca
       const allHistory = historyRes?.items || [];
-      const matchingPhotos = allHistory.filter(
-        (h) =>
-          Number(h.rockId) === Number(rockId) &&
-          typeof h.imageUrl === 'string' &&
-          (h.imageUrl.startsWith('data:image/') || h.imageUrl.startsWith('http'))
-      );
+      const matchingPhotos = allHistory
+        .map((h) => ({
+          id: h.id,
+          rockId: h.rockId,
+          photoUri: h.image_url || h.imageUrl,
+          confidence: h.confidence,
+          createdAt: h.createdAt
+        }))
+        .filter(
+          (h) =>
+            Number(h.rockId) === Number(rockId) &&
+            typeof h.photoUri === 'string' &&
+            (h.photoUri.startsWith('data:image/') ||
+              (h.photoUri.startsWith('http') &&
+                !h.photoUri.includes('example.') &&
+                !h.photoUri.includes('via.placeholder.com')))
+        );
 
-      // Si la roca tiene una foto en imgUrl que aún no estaba en el listado de Analysis, incluirla también
+      // Si la roca tiene una imagen principal en Base64 que no esté ya en la lista, agregarla también
       if (
         typeof data?.imgUrl === 'string' &&
         data.imgUrl.startsWith('data:image/') &&
-        !matchingPhotos.some((p) => p.imageUrl === data.imgUrl)
+        !matchingPhotos.some((p) => p.photoUri === data.imgUrl)
       ) {
-        matchingPhotos.unshift({
+        matchingPhotos.push({
           id: 'main-img',
-          imageUrl: data.imgUrl,
+          rockId: data.id,
+          photoUri: data.imgUrl,
           confidence: 100,
-          createdAt: data.updatedAt || data.createdAt
+          createdAt: data.createdAt
         });
       }
 
@@ -154,18 +166,18 @@ export default function RockDetailScreen({ route, navigation }) {
         </View>
         <Text style={styles.description}>{rock.description}</Text>
 
-        {/* Galería con todas las muestras iguales acumuladas por el usuario */}
+        {/* Galería con todas las fotografías tomadas de este mismo tipo de roca */}
         {capturedSamples.length > 0 && (
           <View style={styles.capturedBox}>
             <Text style={styles.capturedLabel}>
-              Tus muestras fotografiadas de {rock.name} ({capturedSamples.length}):
+              Tus capturas de {rock.name} ({capturedSamples.length}):
             </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4 }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
               {capturedSamples.map((sample, idx) => (
                 <View key={sample.id || idx} style={styles.sampleCard}>
-                  <Image source={{ uri: sample.imageUrl }} style={styles.samplePhoto} />
+                  <Image source={{ uri: sample.photoUri }} style={styles.samplePhoto} />
                   <Text style={styles.sampleCaption}>
-                    Muestra #{idx + 1}
+                    Captura #{capturedSamples.length - idx}
                     {sample.confidence ? ` · ${Math.round(sample.confidence)}%` : ''}
                   </Text>
                 </View>
@@ -194,25 +206,24 @@ export default function RockDetailScreen({ route, navigation }) {
             <Text style={styles.sectionTitle}>Propiedades Físicas y Geológicas</Text>
 
             <DetailRow label="Tipo de roca" value={rock.type?.name || 'No especificado'} />
-            <DetailRow label="Categoría" value={rock.category?.name || 'General'} />
-            <DetailRow label="Composición" value={rock.composition || 'No especificada'} />
-            <DetailRow label="Fórmula química" value={rock.formula || rock.chemicalFormula || 'No aplica (Roca)'} />
-            <DetailRow label="Ambiente de formación" value={rock.environment || rock.formationEnvironment || 'No especificado'} />
-            <DetailRow label="Usos comunes" value={rock.commonUses || 'No especificado'} />
+            <DetailRow label="Categoría" value={rock.category?.name || 'Rock'} />
+            <DetailRow label="Composición" value={rock.composition || 'Not specified'} />
+            <DetailRow label="Fórmula química" value={rock.formula || rock.chemicalFormula || 'Not applicable (rock)'} />
+            <DetailRow label="Ambiente de formación" value={rock.environment || rock.formationEnvironment || 'Not specified'} />
+            <DetailRow label="Usos comunes" value={rock.commonUses || 'Not specified'} />
             <DetailRow label="Dureza (Escala de Mohs)" value={`${rock.hardness ?? 'Variable'}`} />
-            <DetailRow label="Color" value={rock.color || 'Variado'} />
-            <DetailRow label="Raya (Streak)" value={rock.streak || 'No diagnóstica'} />
-            <DetailRow label="Textura" value={rock.texture || 'No especificada'} />
+            <DetailRow label="Color" value={rock.color || 'Variable'} />
+            <DetailRow label="Raya (Streak)" value={rock.streak || 'Not diagnostic'} />
+            <DetailRow label="Textura" value={rock.texture || 'Not specified'} />
             <DetailRow label="Densidad" value={rock.density ? `${rock.density} g/cm³` : '2.6 - 2.8 g/cm³'} />
           </View>
 
-          {/* Privilegio exclusivo para el rol Maestro (Teacher) o Admin */}
           {canEditPedagogicalInfo && (
             <View style={styles.teacherCard}>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
                 <Feather name="award" size={18} color={COLORS.secondary} style={{ marginRight: 6 }} />
                 <Text style={styles.teacherTitle}>
-                  Herramienta Docente ({isTeacher ? 'Rol Maestro' : 'Administrador'})
+                  Herramienta Docente ({isTeacher ? 'Rol Docente / Maestro' : 'Administrador'})
                 </Text>
               </View>
               <Text style={styles.teacherSub}>
@@ -339,7 +350,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     alignItems: 'center'
   },
-  samplePhoto: { width: 130, height: 110, borderRadius: 8, resizeMode: 'cover' },
+  samplePhoto: { width: 140, height: 115, borderRadius: 8, resizeMode: 'cover' },
   sampleCaption: { fontSize: 11, fontWeight: '700', color: COLORS.textSecondary, marginTop: 4 },
   lockedCard: {
     backgroundColor: COLORS.warningBg || '#FFF3CD',
